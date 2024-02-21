@@ -7,6 +7,8 @@
 
   <Denoising 기능 수행 전까지는 'current_image'라는 변수로 이어져오다가, denoising 때 부터 'image_pipeline', 'image_w_model'로 나뉘어 져장됨 ! !! ! 
 
+
+
 * demo.py를 실행해야 pipeline.py의 run_pipeline 함수를 실행해서, 전체 파이프라인 돌고 + PSNR,SSIM 측정하고 + 출력 이미지 두 개 저장까지 됨!
 * pipeline.py의 run_pipeline 함수에 모든 ISP 기능이 들어있음!
 ** 특히, run_pipeline 밑 쪽에 Denoising 기능에 집중 ! ! ! ! !
