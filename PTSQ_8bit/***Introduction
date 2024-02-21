@@ -4,4 +4,8 @@ PTSQ 8bit를 적용한 코드이다
   pipeline.py: ISP pipeline 중 RDU denoising module에 PTSQ quantization를 실시한다. 
     customize configuration / fuse model / prepare model / convert model / quantized model 저장 
     model latency 측정(기존 모델과 비교)
-  
+
+- 코드 실행방법
+  demo.py를 실행해야 pipeline.py의 run_pipeline 함수를 실행해서, 전체 파이프라인 돌고 출력 이미지 저장까지 됨!
+* pipeline.py의 run_pipeline 함수에 모든 ISP 기능이 들어있음!
+** 특히, run_pipeline 밑 쪽에 Denoising 기능에 집중 ! ! ! ! !
