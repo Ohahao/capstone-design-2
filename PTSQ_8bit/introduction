@@ -1,0 +1,7 @@
+PTSQ 8bit를 적용한 코드이다
+- 핵심 코드
+  model.py : 모델 내에서 quantization 적용
+  pipeline.py: ISP pipeline 중 RDU denoising module에 PTSQ quantization를 실시한다. 
+    customize configuration / fuse model / prepare model / convert model / quantized model 저장 
+    model latency 측정(기존 모델과 비교)
+  
