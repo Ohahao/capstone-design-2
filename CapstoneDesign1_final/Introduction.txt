@@ -1,1 +1,8 @@
-hi
+함마 안뇽~
+2024.02.21 종설 회의 시간에 서버에서 막 다운로드 받은 뜨끈뜨끈한 코드들!
+
+이 코드들은~ 아래 두 이미지를 비교할 수 있어
+  'image_pipeline': CV2를 사용해서 기준이 되는 Basic Pipeline을 거친 이미지야! 정답 이미지란 말씀~
+  'image_w_model' : 위와 동일하나, Denoising만 바꿔치기함! -> DIV_2K로 학습 + base filters: 32인 RDUnet의 모델을 거친 이미지야! 비교용 이미지란 말씀~
+
+* demo.py를 실행해야 pipeline.py의 run_pipeline 함수를 실행해서, 전체 파이프라인 돌고 + PSNR,SSIM 측정하고 +  
