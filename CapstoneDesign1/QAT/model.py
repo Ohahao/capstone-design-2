@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 
+from torch.nn.quantized import FloatFunctional
+from typing import List
+ 
 
 @torch.no_grad()
 def init_weights(init_type='xavier'):
@@ -23,28 +26,34 @@ def init_weights(init_type='xavier'):
 
 
 class DownsampleBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels):      
         super(DownsampleBlock, self).__init__()
+        in_channels = int(in_channels)
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=2, stride=2)
         self.actv = nn.PReLU(out_channels)
 
     def forward(self, x):
+        #텐서가 FP에서 quantized model로 양자화된다. 
         return self.actv(self.conv(x))
 
 
 class UpsampleBlock(nn.Module):
     def __init__(self, in_channels, cat_channels, out_channels):
         super(UpsampleBlock, self).__init__()
+        self.f_add = FloatFunctional()
 
-        self.conv = nn.Conv2d(in_channels + cat_channels, out_channels, 3, padding=1)
+        add_cat = self.f_add.add(in_channels, cat_channels)
+        self.conv = nn.Conv2d(add_cat, out_channels, 3, padding=1)
         self.conv_t = nn.ConvTranspose2d(in_channels, in_channels, 2, stride=2)
         self.actv = nn.PReLU(out_channels)
         self.actv_t = nn.PReLU(in_channels)
 
-    def forward(self, x):
-        upsample, concat = x
+    def forward(self, x: List[torch.Tensor]):
+        #upsample, concat = x
+        upsample = x[0]
+        concat = x[1]
         upsample = self.actv_t(self.conv_t(upsample))
-        return self.actv(self.conv(torch.cat([concat, upsample], 1)))
+        return self.actv(self.conv(self.f_add.cat([concat, upsample], 1)))
 
 
 class InputBlock(nn.Module):
@@ -56,7 +65,9 @@ class InputBlock(nn.Module):
         self.actv_1 = nn.PReLU(out_channels)
         self.actv_2 = nn.PReLU(out_channels)
 
+
     def forward(self, x):
+        #x = self.quant(x)
         x = self.actv_1(self.conv_1(x))
         return self.actv_2(self.conv_2(x))
 
@@ -70,6 +81,7 @@ class OutputBlock(nn.Module):
         self.actv_1 = nn.PReLU(in_channels)
         self.actv_2 = nn.PReLU(out_channels)
 
+
     def forward(self, x):
         x = self.actv_1(self.conv_1(x))
         return self.actv_2(self.conv_2(x))
@@ -78,29 +90,38 @@ class OutputBlock(nn.Module):
 class DenoisingBlock(nn.Module):
     def __init__(self, in_channels, inner_channels, out_channels):
         super(DenoisingBlock, self).__init__()
+        self.f_add = FloatFunctional()
         self.conv_0 = nn.Conv2d(in_channels, inner_channels, 3, padding=1)
-        self.conv_1 = nn.Conv2d(in_channels + inner_channels, inner_channels, 3, padding=1)
-        self.conv_2 = nn.Conv2d(in_channels + 2 * inner_channels, inner_channels, 3, padding=1)
-        self.conv_3 = nn.Conv2d(in_channels + 3 * inner_channels, out_channels, 3, padding=1)
+        self.conv_1 = nn.Conv2d(self.f_add.add(in_channels, inner_channels), inner_channels, 3, padding=1)
+        in_channels_1 = int(self.f_add.add(self.f_add.mul_scalar(inner_channels, 2.0), in_channels))
+        self.conv_2 = nn.Conv2d(in_channels_1, inner_channels, 3, padding=1)
+        in_channels_2 = int(self.f_add.add(self.f_add.mul_scalar(inner_channels, 3.0), in_channels))
+        self.conv_3 = nn.Conv2d(in_channels_2, out_channels, 3, padding=1)
+
 
         self.actv_0 = nn.PReLU(inner_channels)
         self.actv_1 = nn.PReLU(inner_channels)
         self.actv_2 = nn.PReLU(inner_channels)
         self.actv_3 = nn.PReLU(out_channels)
 
+
     def forward(self, x):
         out_0 = self.actv_0(self.conv_0(x))
 
-        out_0 = torch.cat([x, out_0], 1)
+        #out_0 = self.quant(out_0)
+        out_0 = self.f_add.cat([x, out_0], 1)
         out_1 = self.actv_1(self.conv_1(out_0))
 
-        out_1 = torch.cat([out_0, out_1], 1)
+        #out_1 = self.quant(out_1)
+        out_1 = self.f_add.cat([out_0, out_1], 1)
         out_2 = self.actv_2(self.conv_2(out_1))
 
-        out_2 = torch.cat([out_1, out_2], 1)
+        #out_2 = self.quant(out_2)
+        out_2 = self.f_add.cat([out_1, out_2], 1)
         out_3 = self.actv_3(self.conv_3(out_2))
+        out_3 = self.f_add.add(x, out_3)
 
-        return out_3 + x
+        return out_3
 
 
 class RDUNet(nn.Module):
@@ -109,12 +130,17 @@ class RDUNet(nn.Module):
     """
     def __init__(self, **kwargs):
         super().__init__()
+        
+        #QuantStub: FP -> INT8
+        #self.quant = torch.quantization.QuantStub()
+        #self.dequant = torch.quantization.DeQuantStub()
+        self.f_mul = FloatFunctional()
 
         channels = kwargs['channels']
         filters_0 = kwargs['base filters']
-        filters_1 = 2 * filters_0
-        filters_2 = 4 * filters_0
-        filters_3 = 8 * filters_0
+        filters_1 = int(self.f_mul.mul_scalar(filters_0, 2.0))
+        filters_2 = int(self.f_mul.mul_scalar(filters_0, 4.0))
+        filters_3 = int(self.f_mul.mul_scalar(filters_0, 8.0))
 
         # Encoder:
         # Level 0:
@@ -155,7 +181,12 @@ class RDUNet(nn.Module):
 
         self.output_block = OutputBlock(filters_0, channels)
 
+        #DeQuantStub: INT8 -> FP
+        #self.dequant = torch.ao.quantization.DeQuantStub()
+
+
     def forward(self, inputs):
+        #inputs = self.quant(inputs)
         out_0 = self.input_block(inputs)    # Level 0
         out_0 = self.block_0_0(out_0)
         out_0 = self.block_0_1(out_0)
@@ -184,4 +215,21 @@ class RDUNet(nn.Module):
         out_6 = self.block_0_2(out_6)
         out_6 = self.block_0_3(out_6)
 
-        return self.output_block(out_6) + inputs
+        out = self.f_mul.add(self.output_block(out_6), inputs)
+        #out = self.dequant(out)
+        return out
+
+
+
+class RDUNet_qaunt(nn.Module):
+    def __init__(self, model_fp32):
+        super(RDUNet_qaunt, self).__init__()
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+        self.model_fp32 = model_fp32    
+
+    def forward(self, x):
+        x = self.quant(x)
+        x = self.model_fp32(x)
+        x = self.dequant(x)
+        return x
