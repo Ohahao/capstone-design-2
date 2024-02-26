@@ -8,15 +8,21 @@ from torch import optim
 
 from metrics import PSNR, SSIM
 
+def save_torchscript_model(model, model_dir, model_filename):
+
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+    model_filepath = os.path.join(model_dir, model_filename)
+    torch.jit.save(torch.jit.script(model), model_filepath)
 
 class EpochLogger:
-    r"""
+    """
     Keeps a log of metrics in the current epoch.
     """
     def __init__(self):
         self.log = {
             'train loss': 0., 'train psnr': 0., 'train ssim': 0., 'val loss': 0., 'val psnr': 0., 'val ssim': 0.
-        } #metric 저장할 빈 딕셔너리 만든 후 초기화
+        }
 
     def update_log(self, metrics, phase):
         """
@@ -137,6 +143,8 @@ def fit_model(model, data_loaders, channels, criterion, optimizer, scheduler, de
     best_model_path, best_psnr = '', -np.inf
     since = time.time()
 
+    model.to(device)
+    
     for epoch in range(1, n_epochs + 1):
         lr = optimizer.param_groups[0]['lr']
         epoch_logger = EpochLogger()
@@ -196,11 +204,23 @@ def fit_model(model, data_loaders, channels, criterion, optimizer, scheduler, de
         # Save the current epoch metrics in a CVS file.
         epoch_data = {'epoch': epoch, 'learning rate': lr, **epoch_log}
         file_logger(epoch_data)
+        
+    # ⑨ 모델을 다시 CPU 상태로 두고 QAT가 적용된 floating point 모델을 quantized integer model로 변환합니다.    
+    model.to("cpu:0")    
+    # Using high-level static quantization wrapper
+    # The above steps, including torch.quantization.prepare, calibrate_model, and torch.quantization.convert, are also equivalent to
+    # quantized_model = torch.quantization.quantize_qat(model=quantized_model, run_fn=train_model, run_args=[train_loader, test_loader, cuda_device], mapping=None, inplace=False)
 
-    # Save the last model and report training time.
-    best_model_path = model_path.format(epoch, log['val loss'], log['val psnr'], log['val ssim'])
-    torch.save(model.state_dict(), best_model_path)
+    # quantized integer model을 저장
+    model = torch.quantization.convert(model, inplace=True)
+    model.eval()
+    # Print quantized model.
+    print(model)
+    # Save the best_model
+    torch.save(model.state_dict(), checkpoint_dir)
+    save_torchscript_model(model=model, model_dir='best_model', model_filename='model_color_quant_test.pth')
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print('Best PSNR: {:4f}'.format(best_psnr))
+    
