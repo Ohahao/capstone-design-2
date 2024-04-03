@@ -1,0 +1,10 @@
+0402에 학습시킨 RDUnet
+- Galaxy S7 이미지 데이터셋 사용 (95:15)
+- Base filters: 64
+- Patch size: 64
+- Batch Size: 32 
+
+Model Size: 158.79MB 
+Model PSNR: 32.3414
+
+Inference 소요 시간 약 9분
