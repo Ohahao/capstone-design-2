@@ -1,11 +1,11 @@
 ---
 model:
-  base filters: 128
+  base filters: 64
   channels: 3
 train:
   noise level: 50
   patch size: 64
-  batch size: 16
+  batch size: 32
   learning rate: 1.e-4
   weight decay: 1.e-5
   scheduler gamma: 0.5
