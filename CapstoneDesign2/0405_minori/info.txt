@@ -1,3 +1,4 @@
+
 학습 환경:
 - base filters: 128
 - patch size: 64
@@ -9,4 +10,7 @@ under fitting issue...
 4에포크 부터 언더피팅 ㄹㅈㄷ!@@!
 
 그나마 학습된 것 중에 제일 멀쩡한.. 것(3에포크꺼) 올려 봅니다 *^^*
--> 아마 못 쓰겠지예~
+-> 아마 못 쓰겠지예~ 일단 성능 검증 안 돌려보긴 했음
+https://drive.google.com/file/d/1Pgy64w1YYmMdjcVjdLj55aPOzBswf4zk/view?usp=share_link
+
+
