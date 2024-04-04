@@ -1,0 +1,6 @@
+학습환경:
+  - base filters: 64
+  - patch size: 64
+  - batch size: 16
+
+  요렇게 설정한 이유: 64/64/32 였을 때 pth가 너무 커서..^^ 한 번 돌려봄..
