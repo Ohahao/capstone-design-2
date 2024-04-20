@@ -1,5 +1,4 @@
 ## QAT code 폴더
---
 1. 8bit QAT(완료)
    - 실행 방법: main_train_qat8.py를 실행하면 saved_models에 QAT가 완료된 파일이 저장된다. 파일명은 main_train_qat8.py의 quantized_model_filename에서 설정한다.
    - 성능
