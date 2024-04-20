@@ -1,0 +1,58 @@
+---
+model:
+  base_filters: 64
+  channels: 3
+  quant: false
+  calibrate: false
+train:
+  noise level: 50
+  patch size: 64
+  batch size: 16
+  learning rate: 1.e-4
+  weight decay: 1.e-5
+  scheduler gamma: 0.5
+  scheduler step: 3
+  epochs: 1  #원래는 21
+  dataset splits: 2
+  device: cuda:0
+  multi gpu: false
+  workers: 2
+  dataset path: '/home/hyoh/Datasets/S7-ISP-Dataset'
+  checkpoint path: 'Checkpoints'
+quant:
+  noise level: 50
+  patch size: 64
+  batch size: 16
+  learning rate: 1.e-6
+  weight decay: 1.e-5
+  scheduler gamma: 0.5
+  scheduler step: 3
+  epochs: 2  #원래는 21
+  dataset splits: 2
+  device: cuda:4
+  multi gpu: false
+  workers: 2
+  dataset path: '/home/hyoh/Datasets/S7-ISP-Dataset'
+  checkpoint path: 'Checkpoints'
+val:
+  noise levels:
+    - 10
+    - 30
+    - 50
+  patch size: 256
+  batch size: 8
+  frequency: 1
+  workers: 24
+  dataset path: '/home/hyoh/Datasets/S7-ISP-Dataset'
+test:
+  noise levels:
+    - 10
+    - 30
+    - 50
+  device: cuda:2
+  padding: true
+  dataset path: 'Datasets/Test'
+  results path: 'result'
+  pretrained models path: 'Pretrained'
+  save images: true
+...
