@@ -8,20 +8,19 @@
         - 원본 모델
           #======== 원본 모델 적용 ==========#
           model_fp32 = RDUNet(**model_params) 
-          # 저장된 양자화 모델 상태 딕셔너리 로드
           state_dict = torch.load(model_filepath)
-          # 양자화 모델에 상태 딕셔너리 적용
+          #양자화 모델에 상태 딕셔너리 적용
           model_fp32.load_state_dict(state_dict, strict=False)
-          # 모델을 평가 모드로 설정 (필요한 경우)
+          #모델을 평가 모드로 설정 (필요한 경우)
           model_fp32.eval()
         - 양자화 모델
           #======== 양자화 모델 적용 ==========#
-          # Sub-8bit Quantized 모델 load
+          #Sub-8bit Quantized 모델 load
           model_fp32 = RDUNet(last_calibrate=False, quant=False, calibrate=False, convert=False, device=cuda_device, **model_params)
           quantized_model = RDUNet_quant(model_fp32, device=cuda_device)
-          # state_dict key의 차원 맞춰주기
+          #state_dict key의 차원 맞춰주기
           state_dict = torch.load(quantized_model_filepath)
-          # .weight로 끝나는 키만 사용하여 모델의 가중치를 설정
+          #.weight로 끝나는 키만 사용하여 모델의 가중치를 설정
           filtered_state_dict = {k: v for k, v in state_dict.items() if not k.endswith('.weight_quantized')}
           quantized_model.load_state_dict(filtered_state_dict, strict=False)
         - 8bit QAT model
