@@ -10,39 +10,14 @@
           <img width="410" alt="스크린샷 2024-05-18 오후 2 19 01" src="https://github.com/Ohahao/capstone-design-2/assets/89395783/47e21945-637b-4ffd-870e-c076ae630b38">
 
          - 양자화 모델
-        - 8bit QAT model
-          #======== 8bit QAT model 적용 =========# 
-          #large model 로드
-          model = RDUNet(channels=3, base_filters=64, device=cpu_device)
-          model_fp32 = RDUNet(channels=3, base_filters=64, device=cpu_device)
-          quantized_model = RDUNet_quant(model_fp32)
-          model.load_state_dict(torch.load(model_filepath, map_location=cuda_device), strict=False)
       
-          
-          #cpu 사용!!
-          #양자화 설정
-          quantization_config = torch.quantization.QConfig(
-              activation=functools.partial(
-                  torch.ao.quantization.fake_quantize.FusedMovingAvgObsFakeQuantize,
-                  quant_min=0,
-                  quant_max=255
-              ),
-              weight=functools.partial(
-                  torch.ao.quantization.fake_quantize.FusedMovingAvgObsFakeQuantize,
-                  quant_min=-128,
-                  quant_max=127,
-                  dtype=torch.qint8,
-                  qscheme=torch.per_tensor_affine
-          )
-          )
-      
-          quantized_model.qconfig = quantization_config
-          quantized_model = torch.quantization.prepare(quantized_model, inplace=True)
-          quantized_model = torch.quantization.convert(quantized_model, inplace=True)   
-          
-          #양자화 모델 인스턴스화
-          #quantized_model = RDUNet_quant(model_fp32)
-          quantized_model.load_state_dict(torch.load(quantized_model_filepath), strict=False)
+        <img width="902" alt="스크린샷 2024-05-18 오후 2 19 45" src="https://github.com/Ohahao/capstone-design-2/assets/89395783/502340e9-1612-4bd1-8f94-c01fd8181fbd">
+
+         - 8bit QAT model
+         
+           <img width="736" alt="스크린샷 2024-05-18 오후 2 20 27" src="https://github.com/Ohahao/capstone-design-2/assets/89395783/427bb8ad-692b-4eff-92f3-9fbdfcbefffb">
+
+
       5) (pipeline.py) inference model 선택: inference에 사용할 모델 이름을 선택한다. 원본 모델은 model_fp32, 양자화 & 8bit QAT 모델은 quantized_model을 사용한다.
       6) (pipeline.py) device 선택: inference 시 사용할 device를 선택한다. 8bit QAT만 cpu_device를 사용하고 나머지 2경우는 cuda_device를 사용한다.
     2. demo2.py 출력 이미지를 psnr.py에 입력하여 psnr을 측정한다. 
