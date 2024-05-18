@@ -5,8 +5,9 @@
      2) (pipeline.py) from (양자화 모델) import RDUNet, RDUNet_quant: 테스트할 비트수에 해당하는 모델을 불러와야한다. 이때 사용하는 모델 파일은 QAT 디렉토리에 위치한다.
        양자화 모델 파일명: model_qat4, model_qat6, model_qat8, model_qat10, model_qat12
      3) (pipeline.py) 모델 로드 코드 선택: 원본 모델 / 양자화 모델(8bit 이외) / 8bit QAT model 각각 모델을 로드하는 코드가 다르다. 필요에 따라 주석처리를 하여 사용한다.
-        - 원본 모델![Uploading 스크린샷 2024-05-18 오후 2.18.04.png…]()
-        - 양자화 모델
+        - 원본 모델
+          <img width="410" alt="스크린샷 2024-05-18 오후 2 19 01" src="https://github.com/Ohahao/capstone-design-2/assets/89395783/47e21945-637b-4ffd-870e-c076ae630b38">
+
           #======== 양자화 모델 적용 ==========#
           #Sub-8bit Quantized 모델 load
           model_fp32 = RDUNet(last_calibrate=False, quant=False, calibrate=False, convert=False, device=cuda_device, **model_params)
