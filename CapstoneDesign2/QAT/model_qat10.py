@@ -30,6 +30,54 @@ def init_weights(init_type='xavier'):
     return initializer
 
 
+class QPReLU(nn.Module):
+    def __init__(self, device, num_parameters=1, init: float = 0.25):
+        super(QPReLU, self).__init__()
+        self.num_parameters = num_parameters
+        self.weight = nn.Parameter(torch.Tensor(num_parameters).fill_(init))
+        self.relu1 = nn.ReLU().to(device)  # 이 부분 수정
+        self.relu2 = nn.ReLU().to(device)  # 이 부분 수정
+        self.f_mul_neg_one1 = nnq.FloatFunctional().to(device)  # 이 부분 수정
+        self.f_mul_neg_one2 = nnq.FloatFunctional().to(device)  # 이 부분 수정
+        self.f_mul_alpha = nnq.FloatFunctional().to(device)  # 이 부분 수정
+        self.f_add = nnq.FloatFunctional().to(device)  # 이 부분 수정
+        self.quant = torch.quantization.QuantStub().to(device)  # 이 부분 수정
+        self.dequant = torch.quantization.DeQuantStub().to(device)  # 이 부분 수정
+        self.quant2 = torch.quantization.QuantStub().to(device)  # 이 부분 수정
+        self.quant3 = torch.quantization.QuantStub().to(device)  # 이 부분 수정
+        self.neg_one = torch.Tensor([-1.0]).to(device)  # 이 부분 수정
+        self.device = device
+    
+    def forward(self, x):
+        x = self.quant(x).to(self.device)
+        
+        # PReLU, with modules only
+        x1 = self.relu1(x)     
+        neg_one_q = self.quant2(self.neg_one).to(self.device)
+        weight_q = self.quant3(self.weight).to(self.device)
+
+        # 연산에 사용되는 모든 모듈을 self.device로 이동
+        self.f_mul_neg_one2.to(self.device)
+        self.relu2.to(self.device)
+        self.f_mul_neg_one1.to(self.device)
+        self.f_add.to(self.device)
+        
+        y = self.f_mul_neg_one2.mul(
+                self.relu2(
+                    self.f_mul_neg_one1.mul(x, neg_one_q),
+                ),
+            neg_one_q)   
+
+        # weight_q 차원 변경 및 확장
+        weight_q = weight_q.view(1, -1, 1, 1)  # [1, num_parameters, 1, 1]
+        weight_q = weight_q.expand_as(y)  # [1, 64, 32, 32]로 확장
+        x2 = self.f_mul_alpha.mul(weight_q, y)
+        
+        x = self.f_add.add(x1, x2)
+        x = self.dequant(x).to(self.device)
+        return x
+
+
 
 class DownsampleBlock(nn.Module):
     def __init__(self, in_channels, out_channels, quant, calibrate, last_calibrate, convert, device):      
@@ -50,7 +98,7 @@ class DownsampleBlock(nn.Module):
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate=last_calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
@@ -60,7 +108,7 @@ class DownsampleBlock(nn.Module):
                           quant = quant,
                           calibrate = calibrate,
                           last_calibrate = last_calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
@@ -68,7 +116,7 @@ class DownsampleBlock(nn.Module):
 
     def forward(self, x):
         self.conv.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
 
         return self.actv(self.conv(x))
 
@@ -92,7 +140,7 @@ class UpsampleBlock(nn.Module):
                             padding=1,
                             quant=quant,
                             calibrate=calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
@@ -102,36 +150,41 @@ class UpsampleBlock(nn.Module):
                                         in_channels,
                                         kernel_size=2,
                                         stride=2,
-                                        bit_type=cfg.BIT_TYPE_6_W,
+                                        bit_type=cfg.BIT_TYPE_10_W,
                                         calibration_mode=cfg.CALIBRATION_MODE_W,    #channel wise
                                         observer_str=cfg.OBSERVER_W,    #minmax
                                         quantizer_str=cfg.QUANTIZER_W,
                                         device=self.device)
-        #self.actv = nn.PReLU(out_channels)
+        self.actv = nn.PReLU(out_channels)
+        '''
         self.actv = QAct( num_parameters=out_channels,
                           quant=quant,
                           calibrate=calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
-        #self.actv_t = nn.PReLU(in_channels)
+        '''
+        self.actv_t = nn.PReLU(in_channels)
+        '''
         self.actv_t = QAct( num_parameters=in_channels,
                            quant=quant,
                            calibrate=calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
+        '''
+
 
     def forward(self, x: List[torch.Tensor]):
         #Set quant & calibrate
         self.conv.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
         self.conv_t.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv_t.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv_t.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
 
         #upsample, concat = x
         upsample = x[0]
@@ -159,7 +212,7 @@ class InputBlock(nn.Module):
                             quant=self.quant,
                             calibrate=self.calibrate,
                             last_calibrate = last_calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
@@ -172,31 +225,35 @@ class InputBlock(nn.Module):
                             quant=self.quant,
                             calibrate=self.calibrate,
                             last_calibrate = last_calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
                             device=self.device)
-        #self.actv_1 = nn.PReLU(out_channels)
+        self.actv_1 = nn.PReLU(out_channels)
+        '''
         self.actv_1 = QAct( num_parameters=out_channels,
                             quant=self.quant,
                             calibrate=self.calibrate,
                             last_calibrate = last_calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
-        #self.actv_2 = nn.PReLU(out_channels)
+        '''
+        self.actv_2 = nn.PReLU(out_channels)
+        '''
         self.actv_2 = QAct( num_parameters=out_channels,
                             quant=self.quant,
                             calibrate=self.calibrate,
                             last_calibrate = last_calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
+        '''
 
 
     def forward(self, x):
@@ -207,8 +264,8 @@ class InputBlock(nn.Module):
         #Set quant & calibrate
         self.conv_1.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
         self.conv_2.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv_1.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv_2.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv_1.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv_2.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
 
         x = self.actv_1(self.conv_1(x)).to(self.device)
         return self.actv_2(self.conv_2(x))
@@ -232,7 +289,7 @@ class OutputBlock(nn.Module):
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
@@ -245,40 +302,44 @@ class OutputBlock(nn.Module):
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
                             device=self.device)
 
-        #self.actv_1 = nn.PReLU(in_channels)
+        self.actv_1 = nn.PReLU(in_channels)
+        '''
         self.actv_1 = QAct( num_parameters=in_channels,
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
-        #self.actv_2 = nn.PReLU(out_channels)
+        '''
+        self.actv_2 = nn.PReLU(out_channels)
+        '''
         self.actv_2 = QAct( num_parameters=out_channels,
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
+        '''
 
 
     def forward(self, x):
         #Set quant & calibrate
         self.conv_1.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
         self.conv_2.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv_1.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv_2.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv_1.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv_2.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
 
         x = self.actv_1(self.conv_1(x)).to(self.device)
         return self.actv_2(self.conv_2(x)).to(self.device)
@@ -303,7 +364,7 @@ class DenoisingBlock(nn.Module):
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
@@ -316,7 +377,7 @@ class DenoisingBlock(nn.Module):
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
@@ -330,7 +391,7 @@ class DenoisingBlock(nn.Module):
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
@@ -344,54 +405,60 @@ class DenoisingBlock(nn.Module):
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                            bit_type=cfg.BIT_TYPE_6_W,
+                            bit_type=cfg.BIT_TYPE_10_W,
                             calibration_mode=cfg.CALIBRATION_MODE_W,
                             observer_str=cfg.OBSERVER_W,
                             quantizer_str=cfg.QUANTIZER_W,
                             device=self.device)
 
-
-        #self.actv_0 = nn.PReLU(inner_channels)
+        self.actv_0 = nn.PReLU(inner_channels)
+        '''
         self.actv_0 = QAct( num_parameters=inner_channels,
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
-        #self.actv_1 = nn.PReLU(inner_channels)
+        '''
+        self.actv_1 = nn.PReLU(inner_channels)
+        '''
         self.actv_1 = QAct( num_parameters=inner_channels,
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
-        #self.actv_2 = nn.PReLU(inner_channels)
+        '''
+        self.actv_2 = nn.PReLU(inner_channels)
+        '''
         self.actv_2 = QAct( num_parameters=inner_channels,
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
-        #self.actv_3 = nn.PReLU(out_channels)
+        '''
+        self.actv_3 = nn.PReLU(out_channels)
+        '''
         self.actv_3 = QAct( num_parameters=out_channels,
                             quant=quant,
                             calibrate=calibrate,
                             last_calibrate = last_calibrate,
-                          bit_type=cfg.BIT_TYPE_6_A,
+                          bit_type=cfg.BIT_TYPE_10_A,
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A,
                           device=self.device)
-
+        '''
 
     def forward(self, x):
         #Set quant & calibrate
@@ -399,10 +466,10 @@ class DenoisingBlock(nn.Module):
         self.conv_1.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
         self.conv_2.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
         self.conv_3.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv_0.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv_1.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv_2.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
-        self.actv_3.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv_0.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv_1.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv_2.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
+        #self.actv_3.update_settings(quant=self.quant, calibrate=self.calibrate, last_calibrate=self.last_calibrate, convert=self.convert, device=self.device)
         
         x = x.to(self.device)
         out_0 = self.actv_0(self.conv_0(x)).to(self.device)
