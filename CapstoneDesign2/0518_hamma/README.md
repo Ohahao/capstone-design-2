@@ -56,6 +56,6 @@
           #양자화 모델 인스턴스화
           #quantized_model = RDUNet_quant(model_fp32)
           quantized_model.load_state_dict(torch.load(quantized_model_filepath), strict=False)
-      4) (pipeline.py) inference model 선택: inference에 사용할 모델 이름을 선택한다. 원본 모델은 model_fp32, 양자화 & 8bit QAT 모델은 quantized_model을 사용한다.
-      5) (pipeline.py) device 선택: inference 시 사용할 device를 선택한다. 8bit QAT만 cpu_device를 사용하고 나머지 2경우는 cuda_device를 사용한다.
+      5) (pipeline.py) inference model 선택: inference에 사용할 모델 이름을 선택한다. 원본 모델은 model_fp32, 양자화 & 8bit QAT 모델은 quantized_model을 사용한다.
+      6) (pipeline.py) device 선택: inference 시 사용할 device를 선택한다. 8bit QAT만 cpu_device를 사용하고 나머지 2경우는 cuda_device를 사용한다.
     2. demo2.py 출력 이미지를 psnr.py에 입력하여 psnr을 측정한다. 
