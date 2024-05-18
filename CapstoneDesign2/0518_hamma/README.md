@@ -6,17 +6,10 @@
        양자화 모델 파일명: model_qat4, model_qat6, model_qat8, model_qat10, model_qat12
      3) (pipeline.py) 모델 로드 코드 선택: 원본 모델 / 양자화 모델(8bit 이외) / 8bit QAT model 각각 모델을 로드하는 코드가 다르다. 필요에 따라 주석처리를 하여 사용한다.
         - 원본 모델
+
           <img width="410" alt="스크린샷 2024-05-18 오후 2 19 01" src="https://github.com/Ohahao/capstone-design-2/assets/89395783/47e21945-637b-4ffd-870e-c076ae630b38">
 
-          #======== 양자화 모델 적용 ==========#
-          #Sub-8bit Quantized 모델 load
-          model_fp32 = RDUNet(last_calibrate=False, quant=False, calibrate=False, convert=False, device=cuda_device, **model_params)
-          quantized_model = RDUNet_quant(model_fp32, device=cuda_device)
-          #state_dict key의 차원 맞춰주기
-          state_dict = torch.load(quantized_model_filepath)
-          #.weight로 끝나는 키만 사용하여 모델의 가중치를 설정
-          filtered_state_dict = {k: v for k, v in state_dict.items() if not k.endswith('.weight_quantized')}
-          quantized_model.load_state_dict(filtered_state_dict, strict=False)
+         - 양자화 모델
         - 8bit QAT model
           #======== 8bit QAT model 적용 =========# 
           #large model 로드
